@@ -52,18 +52,20 @@
       } catch(e){}
     }
 
-    let ship = { x: 100, y: 300, vx: 5, vy: 0, r: 8, angle: 0 };
+    let ship = { x: 100, y: 300, vx: 5.5, vy: 0, r: 8, angle: 0 };
     let planets = [];
     let particles = [];
+    let stardust = [];
     let isHolding = false;
     let currentOrbit = null;
     let score = 0, gatesPassed = 0, gameActive = false;
     let cameraX = 0;
 
     function initGame() {
-      ship = { x: 100, y: 300, vx: 6, vy: 0, r: 8, angle: 0 };
+      ship = { x: 100, y: 300, vx: 5.5, vy: 0, r: 8, angle: 0 };
       planets = [];
       particles = [];
+      stardust = [];
       currentOrbit = null;
       score = 0;
       gatesPassed = 0;
@@ -72,12 +74,21 @@
       document.getElementById('gates-val').textContent = '0';
 
       for (let i = 1; i <= 30; i++) {
+        const px = 250 + i * 280 + (Math.random() - 0.5) * 60;
+        const py = 160 + Math.random() * 280;
         planets.push({
-          x: 250 + i * 280 + (Math.random() - 0.5) * 80,
-          y: 160 + Math.random() * 280,
-          r: 28 + Math.random() * 20,
+          x: px,
+          y: py,
+          r: 28 + Math.random() * 18,
           color: i % 2 === 0 ? '#00f5ff' : '#ff007f',
           passed: false
+        });
+
+        // Spawn bonus stardust between planets
+        stardust.push({
+          x: px - 120,
+          y: py + (Math.random() - 0.5) * 80,
+          collected: false
         });
       }
     }
@@ -93,9 +104,9 @@
       if (!gameActive) return;
       isHolding = val;
       if (isHolding && !currentOrbit) {
-        // Find nearest planet ahead
+        // Generous gravity well search ahead
         let nearest = null;
-        let minDist = 220;
+        let minDist = 290;
         for (const p of planets) {
           const d = Math.hypot(ship.x - p.x, ship.y - p.y);
           if (d < minDist) {
@@ -130,13 +141,13 @@
         
         // Orbital angular velocity
         const speed = 7.5;
-        angle += speed / dist;
+        angle += speed / Math.max(40, dist);
         ship.x = currentOrbit.x + Math.cos(angle) * dist;
         ship.y = currentOrbit.y + Math.sin(angle) * dist;
 
         // Tangent velocity vector on release
-        ship.vx = -Math.sin(angle) * speed * 1.2;
-        ship.vy = Math.cos(angle) * speed * 1.2;
+        ship.vx = -Math.sin(angle) * speed * 1.15;
+        ship.vy = Math.cos(angle) * speed * 1.15;
 
         // Orbit tether line particle
         if (Math.random() < 0.4) {
@@ -174,22 +185,41 @@
         }
       });
 
-      // Out of bounds check
-      if (ship.y < 20 || ship.y > 580) {
-        gameOver();
-        return;
+      // Collect Stardust
+      stardust.forEach(s => {
+        if (!s.collected && Math.hypot(ship.x - s.x, ship.y - s.y) < 30) {
+          s.collected = true;
+          score += 200;
+          document.getElementById('score-val').textContent = score;
+          playChord(gatesPassed + 3);
+          for (let i=0; i<8; i++) particles.push({ x: s.x, y: s.y, vx:(Math.random()-0.5)*6, vy:(Math.random()-0.5)*6, life:1, color:'#ffff00' });
+        }
+      });
+
+      // Boundary soft deflection cushions (Human-friendly)
+      if (ship.y < 25) {
+        ship.y = 25;
+        ship.vy = Math.abs(ship.vy) * 0.7 + 1.5;
+        for (let i=0; i<5; i++) particles.push({ x: ship.x, y: ship.y, vx:(Math.random()-0.5)*4, vy: 2, life:0.6, color:'#ff007f' });
+      } else if (ship.y > 575) {
+        ship.y = 575;
+        ship.vy = -Math.abs(ship.vy) * 0.7 - 1.5;
+        for (let i=0; i<5; i++) particles.push({ x: ship.x, y: ship.y, vx:(Math.random()-0.5)*4, vy: -2, life:0.6, color:'#ff007f' });
       }
 
       // Generate infinite planets ahead
       if (planets[planets.length - 1].x - ship.x < 1200) {
         const last = planets[planets.length - 1];
+        const nx = last.x + 280 + (Math.random() - 0.5) * 60;
+        const ny = 160 + Math.random() * 280;
         planets.push({
-          x: last.x + 280 + (Math.random() - 0.5) * 80,
-          y: 160 + Math.random() * 280,
-          r: 28 + Math.random() * 20,
+          x: nx,
+          y: ny,
+          r: 28 + Math.random() * 18,
           color: Math.random() > 0.5 ? '#00f5ff' : '#ff007f',
           passed: false
         });
+        stardust.push({ x: nx - 120, y: ny + (Math.random() - 0.5) * 80, collected: false });
       }
 
       // Render
@@ -206,6 +236,18 @@
       for (let x = startGridX; x < startGridX + 900; x += 60) {
         ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 600); ctx.stroke();
       }
+
+      // Draw Stardust Gems
+      stardust.forEach(s => {
+        if (s.collected || s.x < cameraX - 100 || s.x > cameraX + 900) return;
+        ctx.fillStyle = '#fffb00';
+        ctx.shadowColor = '#fffb00'; ctx.shadowBlur = 15;
+        ctx.beginPath();
+        const pulseR = 7 + Math.sin(Date.now() * 0.008 + s.x) * 2;
+        ctx.arc(s.x, s.y, pulseR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      });
 
       // Draw Planets / Gravity Wells
       planets.forEach(p => {
