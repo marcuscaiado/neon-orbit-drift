@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Neon Orbit Drift 🛸💫</title>
+  <script src="arcade-leaderboard.js"></script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; touch-action:none; user-select:none; }
+    body { background:#050713; color:#fff; font-family:'Segoe UI',sans-serif; overflow:hidden; display:flex; justify-content:center; align-items:center; height:100vh; }
+    #canvas-container { position:relative; width:100vw; height:100vh; max-width:800px; }
+    @media (max-width: 600px) { .hud { font-size:16px; } .arcade-nav { font-size:11px; padding:6px 10px; } }
+    canvas { width:100%; height:100%; display:block; background:#050713; }
+    .arcade-nav { position:absolute; top:16px; right:16px; z-index:100; background:rgba(0,0,0,0.7); border:2px solid #00f5ff; color:#00f5ff; padding:8px 16px; border-radius:8px; font-weight:bold; text-decoration:none; font-size:13px; box-shadow:0 0 15px rgba(0,245,255,0.4); }
+    .hud { position:absolute; top:16px; left:16px; font-family:monospace; font-size:20px; font-weight:bold; color:#00f5ff; text-shadow:0 0 10px #00f5ff; pointer-events:none; }
+    .hint { position:absolute; bottom:24px; left:50%; transform:translateX(-50%); font-size:15px; color:#aaa; pointer-events:none; font-weight:bold; text-align:center; }
+    #modal { position:absolute; inset:0; background:rgba(0,0,0,0.85); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; z-index:200; }
+    #modal h1 { color:#00f5ff; font-size:40px; text-shadow:0 0 20px #00f5ff; text-align:center; }
+    .btn { background:linear-gradient(135deg,#00f5ff,#ff007f); border:none; color:#000; padding:12px 32px; font-size:18px; font-weight:bold; border-radius:8px; cursor:pointer; text-decoration:none; box-shadow:0 0 20px rgba(0,245,255,0.5); }
+  </style>
+</head>
+<body>
+  <div id="canvas-container">
+    <a href="https://marcuscaiado.github.io/marcus-arcade/" class="arcade-nav">🕹️ Arcade Hub</a>
+    <div class="hud">SCORE: <span id="score-val">0</span> | GATES: <span id="gates-val">0</span></div>
+    <div class="hint">Tap & Hold to Latch Orbit 🛸 • Release to Slingshot ⚡</div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    
+    <div id="modal">
+      <h1 id="modal-title">NEON ORBIT DRIFT 🛸</h1>
+      <p style="font-size:16px; color:#aaa;" id="modal-sub">Hold screen or Spacebar to orbit gravity wells</p>
+      <button class="btn" onclick="startGame()">START FLIGHT ⚡</button>
+      <a href="https://marcuscaiado.github.io/marcus-arcade/" class="btn" style="background:#222; color:#fff; border:1px solid #00f5ff;">ARCADE HUB 🕹️</a>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Web Audio Chords
+    let audioCtx = null;
+    function getAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }
+    const PENTATONIC = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25];
+    function playChord(noteIdx) {
+      try {
+        const c = getAudio(); const osc = c.createOscillator(); const g = c.createGain();
+        osc.type = 'sine'; osc.frequency.value = PENTATONIC[noteIdx % PENTATONIC.length];
+        g.gain.setValueAtTime(0.15, c.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.35);
+        osc.connect(g); g.connect(c.destination); osc.start(); osc.stop(c.currentTime + 0.35);
+      } catch(e){}
+    }
+
+    let ship = { x: 100, y: 300, vx: 5, vy: 0, r: 8, angle: 0 };
+    let planets = [];
+    let particles = [];
+    let isHolding = false;
+    let currentOrbit = null;
+    let score = 0, gatesPassed = 0, gameActive = false;
+    let cameraX = 0;
+
+    function initGame() {
+      ship = { x: 100, y: 300, vx: 6, vy: 0, r: 8, angle: 0 };
+      planets = [];
+      particles = [];
+      currentOrbit = null;
+      score = 0;
+      gatesPassed = 0;
+      cameraX = 0;
+      document.getElementById('score-val').textContent = '0';
+      document.getElementById('gates-val').textContent = '0';
+
+      for (let i = 1; i <= 30; i++) {
+        planets.push({
+          x: 250 + i * 280 + (Math.random() - 0.5) * 80,
+          y: 160 + Math.random() * 280,
+          r: 28 + Math.random() * 20,
+          color: i % 2 === 0 ? '#00f5ff' : '#ff007f',
+          passed: false
+        });
+      }
+    }
+
+    function startGame() {
+      initGame();
+      document.getElementById('modal').style.display = 'none';
+      gameActive = true;
+      requestAnimationFrame(loop);
+    }
+
+    function setHold(val) {
+      if (!gameActive) return;
+      isHolding = val;
+      if (isHolding && !currentOrbit) {
+        // Find nearest planet ahead
+        let nearest = null;
+        let minDist = 220;
+        for (const p of planets) {
+          const d = Math.hypot(ship.x - p.x, ship.y - p.y);
+          if (d < minDist) {
+            minDist = d;
+            nearest = p;
+          }
+        }
+        if (nearest) {
+          currentOrbit = nearest;
+          playChord(gatesPassed);
+        }
+      } else if (!isHolding && currentOrbit) {
+        currentOrbit = null;
+      }
+    }
+
+    window.addEventListener('mousedown', () => setHold(true));
+    window.addEventListener('mouseup', () => setHold(false));
+    window.addEventListener('touchstart', (e) => { e.preventDefault(); setHold(true); }, { passive:false });
+    window.addEventListener('touchend', (e) => { e.preventDefault(); setHold(false); }, { passive:false });
+    window.addEventListener('keydown', (e) => { if (e.code === 'Space') setHold(true); });
+    window.addEventListener('keyup', (e) => { if (e.code === 'Space') setHold(false); });
+
+    function loop() {
+      if (!gameActive) return;
+
+      if (currentOrbit) {
+        const dx = ship.x - currentOrbit.x;
+        const dy = ship.y - currentOrbit.y;
+        const dist = Math.hypot(dx, dy);
+        let angle = Math.atan2(dy, dx);
+        
+        // Orbital angular velocity
+        const speed = 7.5;
+        angle += speed / dist;
+        ship.x = currentOrbit.x + Math.cos(angle) * dist;
+        ship.y = currentOrbit.y + Math.sin(angle) * dist;
+
+        // Tangent velocity vector on release
+        ship.vx = -Math.sin(angle) * speed * 1.2;
+        ship.vy = Math.cos(angle) * speed * 1.2;
+
+        // Orbit tether line particle
+        if (Math.random() < 0.4) {
+          particles.push({ x: ship.x, y: ship.y, vx:(Math.random()-0.5)*2, vy:(Math.random()-0.5)*2, life:1, color: currentOrbit.color });
+        }
+      } else {
+        ship.x += ship.vx;
+        ship.y += ship.vy;
+        ship.vx = Math.max(5, ship.vx * 0.998);
+        ship.vy *= 0.995;
+      }
+
+      ship.angle = Math.atan2(ship.vy, ship.vx);
+      cameraX = ship.x - 200;
+
+      // Trail particles
+      particles.push({
+        x: ship.x - Math.cos(ship.angle) * 10,
+        y: ship.y - Math.sin(ship.angle) * 10,
+        vx: -ship.vx * 0.2 + (Math.random()-0.5)*2,
+        vy: -ship.vy * 0.2 + (Math.random()-0.5)*2,
+        life: 0.8,
+        color: '#00f5ff'
+      });
+
+      // Score & Planet Passing
+      planets.forEach(p => {
+        if (!p.passed && ship.x > p.x) {
+          p.passed = true;
+          gatesPassed++;
+          score += 150;
+          document.getElementById('score-val').textContent = score;
+          document.getElementById('gates-val').textContent = gatesPassed;
+          playChord(gatesPassed);
+        }
+      });
+
+      // Out of bounds check
+      if (ship.y < 20 || ship.y > 580) {
+        gameOver();
+        return;
+      }
+
+      // Generate infinite planets ahead
+      if (planets[planets.length - 1].x - ship.x < 1200) {
+        const last = planets[planets.length - 1];
+        planets.push({
+          x: last.x + 280 + (Math.random() - 0.5) * 80,
+          y: 160 + Math.random() * 280,
+          r: 28 + Math.random() * 20,
+          color: Math.random() > 0.5 ? '#00f5ff' : '#ff007f',
+          passed: false
+        });
+      }
+
+      // Render
+      ctx.fillStyle = '#050713';
+      ctx.fillRect(0, 0, 800, 600);
+
+      ctx.save();
+      ctx.translate(-cameraX, 0);
+
+      // Background Starfield Grid
+      ctx.strokeStyle = 'rgba(0, 245, 255, 0.05)';
+      ctx.lineWidth = 1;
+      const startGridX = Math.floor(cameraX / 60) * 60;
+      for (let x = startGridX; x < startGridX + 900; x += 60) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 600); ctx.stroke();
+      }
+
+      // Draw Planets / Gravity Wells
+      planets.forEach(p => {
+        if (p.x < cameraX - 100 || p.x > cameraX + 900) return;
+
+        // Gravity Ring
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.35;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 2.8, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        // Core
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color; ctx.shadowBlur = 20;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Inner highlight
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(p.x - p.r * 0.3, p.y - p.r * 0.3, p.r * 0.25, 0, Math.PI * 2); ctx.fill();
+      });
+
+      // Draw Orbit Tether Line
+      if (currentOrbit) {
+        ctx.strokeStyle = '#00f5ff';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#00f5ff'; ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.moveTo(currentOrbit.x, currentOrbit.y);
+        ctx.lineTo(ship.x, ship.y);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      // Draw Particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const pt = particles[i];
+        pt.x += pt.vx; pt.y += pt.vy; pt.life -= 0.035;
+        if (pt.life <= 0) { particles.splice(i, 1); continue; }
+        ctx.fillStyle = pt.color; ctx.globalAlpha = pt.life;
+        ctx.fillRect(pt.x, pt.y, 4, 4);
+        ctx.globalAlpha = 1;
+      }
+
+      // Draw Spaceship
+      ctx.save();
+      ctx.translate(ship.x, ship.y);
+      ctx.rotate(ship.angle);
+      ctx.fillStyle = '#00f5ff';
+      ctx.shadowColor = '#00f5ff'; ctx.shadowBlur = 15;
+      ctx.beginPath();
+      ctx.moveTo(14, 0);
+      ctx.lineTo(-10, -8);
+      ctx.lineTo(-6, 0);
+      ctx.lineTo(-10, 8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+
+      ctx.restore();
+      requestAnimationFrame(loop);
+    }
+
+    function gameOver() {
+      gameActive = false;
+      document.getElementById('modal-title').textContent = 'ORBIT CRASHED! 💥';
+      document.getElementById('modal-sub').textContent = `FINAL SCORE: ${score} | GATES: ${gatesPassed}`;
+      document.getElementById('modal').style.display = 'flex';
+      try {
+        if (window.ArcadeLeaderboard) {
+          window.ArcadeLeaderboard.submitScore('neon-orbit-drift', score);
+        }
+      } catch(e){}
+    }
+  </script>
+</body>
+</html>
