@@ -181,7 +181,15 @@
           score += 150;
           document.getElementById('score-val').textContent = score;
           document.getElementById('gates-val').textContent = gatesPassed;
-          playChord(gatesPassed);
+          if (window.DopamineSynth) {
+            window.DopamineSynth.playCombo(gatesPassed);
+          } else {
+            playChord(gatesPassed);
+          }
+          if (window.DopamineJuice) {
+            const screenX = (p.x - cameraX);
+            window.DopamineJuice.spawnScore(screenX, p.y, `+150 ORBIT! 🪐`, gatesPassed);
+          }
         }
       });
 
@@ -191,7 +199,15 @@
           s.collected = true;
           score += 200;
           document.getElementById('score-val').textContent = score;
-          playChord(gatesPassed + 3);
+          if (window.DopamineSynth) {
+            window.DopamineSynth.playScore(0.22);
+          } else {
+            playChord(gatesPassed + 3);
+          }
+          if (window.DopamineJuice) {
+            const screenX = (s.x - cameraX);
+            window.DopamineJuice.spawnScore(screenX, s.y, `+200 ⭐`, 3);
+          }
           for (let i=0; i<8; i++) particles.push({ x: s.x, y: s.y, vx:(Math.random()-0.5)*6, vy:(Math.random()-0.5)*6, life:1, color:'#ffff00' });
         }
       });
@@ -315,6 +331,8 @@
 
     function gameOver() {
       gameActive = false;
+      if (window.DopamineSynth) window.DopamineSynth.playWin();
+      if (window.DopamineJuice) window.DopamineJuice.explodeConfetti(window.innerWidth / 2, window.innerHeight * 0.4, 65);
       document.getElementById('modal-title').textContent = 'ORBIT CRASHED! 💥';
       document.getElementById('modal-sub').textContent = `FINAL SCORE: ${score} | GATES: ${gatesPassed}`;
       document.getElementById('modal').style.display = 'flex';
