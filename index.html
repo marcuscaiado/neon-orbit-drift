@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Neon Orbit Drift 🛸💫</title>
   <script src="arcade-sound-engine.js"></script>
+  <script src="arcade-difficulty.js"></script>
   <script src="arcade-leaderboard.js"></script>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; touch-action:none; user-select:none; }
@@ -67,6 +68,7 @@
     let cameraX = 0;
 
     function initGame() {
+      if (window.ArcadeDifficulty) ArcadeDifficulty.reset();
       ship = { x: 100, y: 300, vx: 5.5, vy: 0, r: 8, angle: 0 };
       planets = [];
       particles = [];
@@ -111,7 +113,8 @@
       if (isHolding && !currentOrbit) {
         // Generous gravity well search ahead
         let nearest = null;
-        let minDist = 290;
+        const ddaMult = window.ArcadeDifficulty ? ArcadeDifficulty.getMultiplier(score, 30, 2.0) : 1.0;
+        let minDist = Math.max(220, 290 - (ddaMult - 1.0) * 45);
         for (const p of planets) {
           const d = Math.hypot(ship.x - p.x, ship.y - p.y);
           if (d < minDist) {
@@ -145,7 +148,7 @@
         let angle = Math.atan2(dy, dx);
         
         // Orbital angular velocity
-        const speed = 7.5;
+        const speed = window.ArcadeDifficulty ? ArcadeDifficulty.scaleSpeed(7.5, score, 30, 1.45) : 7.5;
         angle += speed / Math.max(40, dist);
         ship.x = currentOrbit.x + Math.cos(angle) * dist;
         ship.y = currentOrbit.y + Math.sin(angle) * dist;
