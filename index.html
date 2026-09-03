@@ -19,11 +19,20 @@
     #modal { position:absolute; inset:0; background:rgba(0,0,0,0.85); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; z-index:200; }
     #modal h1 { color:#00f5ff; font-size:40px; text-shadow:0 0 20px #00f5ff; text-align:center; }
     .btn { background:linear-gradient(135deg,#00f5ff,#ff007f); border:none; color:#000; padding:12px 32px; font-size:18px; font-weight:bold; border-radius:8px; cursor:pointer; text-decoration:none; box-shadow:0 0 20px rgba(0,245,255,0.5); }
-  </style>
+  
+/* Universal Mobile Touch & Top Navigation Safeguards */
+.arcade-nav, .arcade-link, .nav-btn-arcade, .arcade-corner-btn, .arcade-btn, .btn-arcade, a[href*="arcad"], #modal a, #modal button, .modal a, .modal button, #game-over-modal a, #game-over-modal button {
+  pointer-events: auto !important;
+  touch-action: auto !important;
+  cursor: pointer !important;
+  -webkit-tap-highlight-color: rgba(0, 245, 255, 0.4);
+}
+
+</style>
 </head>
 <body>
   <div id="canvas-container">
-    <a href="https://marcuscaiado.github.io/marcus-arcade/" class="arcade-nav">🕹️ Arcade Hub</a>
+    <a href="https://marcuscaiado.github.io/marcus-arcade/" class="arcade-nav" target="_top" onclick="if(window.top){window.top.location.href=this.href;return false;}" ontouchend="if(window.top){window.top.location.href=this.href;return false;}">🕹️ Arcade Hub</a>
     <div class="hud">SCORE: <span id="score-val">0</span> | GATES: <span id="gates-val">0</span></div>
     <div class="hint">Tap & Hold to Latch Orbit 🛸 • Release to Slingshot ⚡</div>
     <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -32,7 +41,7 @@
       <h1 id="modal-title">NEON ORBIT DRIFT 🛸</h1>
       <p style="font-size:16px; color:#aaa;" id="modal-sub">Hold screen or Spacebar to orbit gravity wells</p>
       <button class="btn" onclick="startGame()">START FLIGHT ⚡</button>
-      <a href="https://marcuscaiado.github.io/marcus-arcade/" class="btn" style="background:#222; color:#fff; border:1px solid #00f5ff;">ARCADE HUB 🕹️</a>
+      <a href="https://marcuscaiado.github.io/marcus-arcade/" class="btn" style="background:#222; color:#fff; border:1px solid #00f5ff;" target="_top" onclick="if(window.top){window.top.location.href=this.href;return false;}" ontouchend="if(window.top){window.top.location.href=this.href;return false;}">ARCADE HUB 🕹️</a>
     </div>
   </div>
 
@@ -133,8 +142,8 @@
 
     window.addEventListener('mousedown', () => setHold(true));
     window.addEventListener('mouseup', () => setHold(false));
-    window.addEventListener('touchstart', (e) => { e.preventDefault(); setHold(true); }, { passive:false });
-    window.addEventListener('touchend', (e) => { e.preventDefault(); setHold(false); }, { passive:false });
+    window.addEventListener('touchstart', (e) => { if (e.target && e.target.closest && e.target.closest('a, button, .arcade-nav, #modal')) return; e.preventDefault(); setHold(true); }, { passive:false });
+    window.addEventListener('touchend', (e) => { if (e.target && e.target.closest && e.target.closest('a, button, .arcade-nav, #modal')) return; e.preventDefault(); setHold(false); }, { passive:false });
     window.addEventListener('keydown', (e) => { if (e.code === 'Space') setHold(true); });
     window.addEventListener('keyup', (e) => { if (e.code === 'Space') setHold(false); });
 
